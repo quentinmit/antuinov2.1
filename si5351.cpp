@@ -1,4 +1,7 @@
+#include <Arduino.h>
 #include <Wire.h>
+
+#include "antenna_analyzer.h"
 
 #define SI_CLK0_CONTROL  16      // Register definitions
 #define SI_CLK1_CONTROL 17

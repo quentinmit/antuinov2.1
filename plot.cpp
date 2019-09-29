@@ -1,4 +1,11 @@
+#include <Arduino.h>
+#include <glcd.h>
+
+#include "antenna_analyzer.h"
+#include "gui.h"
+
 int16_t plot_readings[128];
+#define X_OFFSET 18
 #define Y_OFFSET 14
 
 unsigned long f, f1, f2, stepSize;
@@ -20,6 +27,70 @@ int vswr2screen(int y){
   if (y >= 100)
     y = 99;
   return y/2 + Y_OFFSET-1;
+}
+
+// this builds up the top line of the display with frequency and mode
+void updateHeading() {
+  int vswr_reading;
+  // tks Jack Purdum W8TEE
+  // replaced fsprint commmands by str commands for code size reduction
+
+  memset(c, 0, sizeof(c));
+  memset(b, 0, sizeof(b));
+
+  ultoa(frequency, b, DEC);
+
+  if (mode == MODE_ANTENNA_ANALYZER)
+    strcpy(c, "SWR ");
+  else if (mode == MODE_MEASUREMENT_RX)
+    strcpy(c, "PWR ");
+  else if (mode == MODE_NETWORK_ANALYZER)
+    strcpy(c, "SNA ");
+  
+  //one mhz digit if less than 10 M, two digits if more
+
+   if (frequency >= 100000000l){
+    strncat(c, b, 3);
+    strcat(c, ".");
+    strncat(c, &b[3], 3);
+    strcat(c, ".");
+    strncat(c, &b[6], 3);
+  }
+  else if (frequency >= 10000000l){
+    strncat(c, b, 2);
+    strcat(c, ".");
+    strncat(c, &b[2], 3);
+    strcat(c, ".");
+    strncat(c, &b[5], 3);
+  }
+  else {
+    strncat(c, b, 1);
+    strcat(c, ".");
+    strncat(c, &b[1], 3);    
+    strcat(c, ".");
+    strncat(c, &b[4], 3);
+  }
+
+  GLCD.DrawString(c, 0, 0);
+
+  itoa(spanFreq/10000, c, 10);
+  strcat(c, "K/d");
+  GLCD.DrawString(c, 128-(strlen(c)*6), 0);
+}
+
+void powerHeading(int current_pos){
+  
+  GLCD.FillRect(0,0,127,12, WHITE);
+  freqtoa(f1 + (stepSize * current_pos), b);
+  GLCD.DrawString(b, 0, 0);
+  
+  if (mode == MODE_ANTENNA_ANALYZER)
+    sprintf (b, " %d.%01d", plot_readings[current_pos]/10,plot_readings[current_pos] % 10);
+  else
+    sprintf(b, "%ddbm", plot_readings[current_pos]);
+
+  GLCD.DrawString(b, 80, 0);
+  GLCD.DrawLine(current_pos+ X_OFFSET, 8, current_pos + X_OFFSET,11);
 }
 
 void setupPowerGrid(){
@@ -110,7 +181,7 @@ void setupVSWRGrid(){
     takeReading(f);
     delay(20);
     //now take the readings
-    return_loss = openReading(f) - analogRead(DBM_READING)/5;
+    int return_loss = openReading(f) - analogRead(DBM_READING)/5;
     if (return_loss > 30)
       return_loss = 30;
     if (return_loss < 0)
@@ -149,22 +220,6 @@ void updateCursor(int pos, char*text){
   GLCD.FillRect(0,0,127,10, WHITE);
   GLCD.DrawString(text, 0, 0);
   GLCD.DrawLine(pos+ X_OFFSET, 8, pos + X_OFFSET,9);
-}
-
-
-void powerHeading(int current_pos){
-  
-  GLCD.FillRect(0,0,127,12, WHITE);
-  freqtoa(f1 + (stepSize * current_pos), b);
-  GLCD.DrawString(b, 0, 0);
-  
-  if (mode == MODE_ANTENNA_ANALYZER)
-    sprintf (b, " %d.%01d", plot_readings[current_pos]/10,plot_readings[current_pos] % 10);
-  else
-    sprintf(b, "%ddbm", plot_readings[current_pos]);
-
-  GLCD.DrawString(b, 80, 0);
-  GLCD.DrawLine(current_pos+ X_OFFSET, 8, current_pos + X_OFFSET,11);
 }
 
 void plotPower(){

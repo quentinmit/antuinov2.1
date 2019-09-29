@@ -1,5 +1,12 @@
+#include <Arduino.h>
+#include <glcd.h>
+#include <EEPROM.h>
+
+#include "antenna_analyzer.h"
+#include "plot.h"
+#include "gui.h"
+
 int x1, y1, w, h, x2, y2;
-#define X_OFFSET 18
 
 
 #define MENU_CHANGE_MHZ 0
@@ -18,6 +25,14 @@ int x1, y1, w, h, x2, y2;
 
 int uiFocus = MENU_CHANGE_MHZ, knob=0, uiSelected = -1;
 
+int enc_prev_state = 3;
+
+void uiFreq(int);
+void uiSWR(int);
+void uiPWR(int);
+void uiSNA(int);
+void uiSpan(int);
+void uiPlot(int);
 
 //returns true if the button is pressed
 int btnDown(){
@@ -118,7 +133,7 @@ void updateMeter(){
 
   if (mode == MODE_ANTENNA_ANALYZER){
     r = analogRead(DBM_READING)/5;
-    return_loss = openReading(frequency) - r;
+    int return_loss = openReading(frequency) - r;
     Serial.print("db:");
     Serial.println(r);
     if (return_loss > 30)
@@ -149,55 +164,6 @@ void updateMeter(){
   //leave the offset to 37 pixels
   GLCD.DrawRoundRect(45, 15, 82, 6, 2);
   GLCD.FillRect(47, 17, (percentage * 8)/10, 2, BLACK); 
-}
-
-// this builds up the top line of the display with frequency and mode
-void updateHeading() {
-  int vswr_reading;
-  // tks Jack Purdum W8TEE
-  // replaced fsprint commmands by str commands for code size reduction
-
-  memset(c, 0, sizeof(c));
-  memset(b, 0, sizeof(b));
-
-  ultoa(frequency, b, DEC);
-
-  if (mode == MODE_ANTENNA_ANALYZER)
-    strcpy(c, "SWR ");
-  else if (mode == MODE_MEASUREMENT_RX)
-    strcpy(c, "PWR ");
-  else if (mode == MODE_NETWORK_ANALYZER)
-    strcpy(c, "SNA ");
-  
-  //one mhz digit if less than 10 M, two digits if more
-
-   if (frequency >= 100000000l){
-    strncat(c, b, 3);
-    strcat(c, ".");
-    strncat(c, &b[3], 3);
-    strcat(c, ".");
-    strncat(c, &b[6], 3);
-  }
-  else if (frequency >= 10000000l){
-    strncat(c, b, 2);
-    strcat(c, ".");
-    strncat(c, &b[2], 3);
-    strcat(c, ".");
-    strncat(c, &b[5], 3);
-  }
-  else {
-    strncat(c, b, 1);
-    strcat(c, ".");
-    strncat(c, &b[1], 3);    
-    strcat(c, ".");
-    strncat(c, &b[4], 3);
-  }
-
-  GLCD.DrawString(c, 0, 0);
-
-  itoa(spanFreq/10000, c, 10);
-  strcat(c, "K/d");
-  GLCD.DrawString(c, 128-(strlen(c)*6), 0);
 }
 
 
@@ -288,11 +254,11 @@ void uiFreq(int action){
      
     while(!btnDown()){
       int r = analogRead(DBM_READING);
-      if (r != prev){
+      if (r != prevReading){
         takeReading(centerFreq);
         updateMeter();
         //Serial.println(r/5);
-        prev = r;
+        prevReading = r;
       }
       int i = enc_read();
       if (i < 0 && centerFreq > 1000000l){
@@ -521,7 +487,7 @@ void updateScreen(){
      break;
   }
 
-  strcat(b, "   v2.1");
+  strcat(b, "   v2.2");
   GLCD.DrawString(b, 1, 1);  
   GLCD.InvertRect(0,0, 128,9);
 
