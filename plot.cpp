@@ -129,6 +129,20 @@ void setupPowerGrid(){
 
 }
 
+void xorDot(uint8_t x, uint8_t y) {
+  uint8_t data;
+
+  if((x >= DISPLAY_WIDTH) || (y >= DISPLAY_HEIGHT))
+    return;
+
+  GLCD.GotoXY(x, y-y%8);                                 // read data from display memory
+
+  data = GLCD.ReadData();
+  data = data ^ (0x01 << (y%8));
+  //data = 0xFF;
+  GLCD.WriteData(data);                                  // write data back to display
+}
+
 
 void setupVSWRGrid(){
   int x, y;
@@ -171,46 +185,74 @@ void setupVSWRGrid(){
   f1 = centerFreq - (spanFreq/2);
   f2 = f1 + spanFreq;
   stepSize = (f2 - f1)/100;
-  int i = 0, vswr_reading;
+  int vswr_reading;
 
   Serial.print("f1 "); Serial.println(f1);
   Serial.print("f2 "); Serial.println(f2);
   Serial.print("step "); Serial.println(stepSize);
 
-  for (f = f1; f < f2; f += stepSize){
-    takeReading(f);
-    delay(20);
-    //now take the readings
-    int return_loss = openReading(f) - analogRead(DBM_READING)/5;
-    if (return_loss > 30)
-      return_loss = 30;
-    if (return_loss < 0)
-      return_loss = 0;
-    
-    vswr_reading = pgm_read_word_near(vswr + return_loss);
-    plot_readings[i] = vswr_reading;
-    //Serial.print(vswr_reading); Serial.print(' '); Serial.print(f); Serial.print(' ');Serial.print(freq2screen(f)); 
-    //Serial.print("x");Serial.print(vswr_reading);Serial.print(' ');Serial.println(vswr2screen(vswr_reading));
-
-    if (i == 0)
-      GLCD.SetDot(freq2screen(f),vswr2screen(vswr_reading),BLACK);
-    else
-      GLCD.DrawLine(i + X_OFFSET-1, vswr2screen(plot_readings[i-1]), i + X_OFFSET, vswr2screen(plot_readings[i])); 
-    i++;
-  }
-
   int current_pos = 50;
 
-  powerHeading(current_pos);
-  while (!btnDown()){
-    i = enc_read();
+  bool first = true;
+  while (!btnDown()) {
+    int i = 0;
+    for (f = f1; f < f2; f += stepSize){
+      takeReading(f);
+      delay(20);
+      //now take the readings
+      int return_loss = openReading(f) - analogRead(DBM_READING)/5;
+      if (return_loss > 30)
+	return_loss = 30;
+      if (return_loss < 0)
+	return_loss = 0;
+
+      int16_t oldY = vswr2screen(plot_readings[i]);
+      vswr_reading = pgm_read_word_near(vswr + return_loss);
+      plot_readings[i] = vswr_reading;
+      //Serial.print(vswr_reading); Serial.print(' '); Serial.print(f); Serial.print(' ');Serial.print(freq2screen(f));
+      //Serial.print("x");Serial.print(vswr_reading);Serial.print(' ');Serial.println(vswr2screen(vswr_reading));
+
+      /*if (!first)
+	xorDot(freq2screen(f),vswr2screen(old_reading));
+	xorDot(freq2screen(f),vswr2screen(vswr_reading));*/
+      if (false) {
+	int newY = vswr2screen(vswr_reading);
+	Serial.print("x"); Serial.print(i + X_OFFSET);
+	Serial.print(" oldY"); Serial.print(oldY);
+	Serial.print(" newY"); Serial.print(newY);
+	Serial.println();
+	if (!first)
+	  xorDot(i + X_OFFSET,oldY);
+	xorDot(i + X_OFFSET,newY);
+      } else {
+	if (i == 0)
+	  GLCD.SetDot(freq2screen(f),vswr2screen(vswr_reading),BLACK);
+	else
+	  GLCD.DrawLine(i + X_OFFSET-1, vswr2screen(plot_readings[i-1]), i + X_OFFSET, vswr2screen(plot_readings[i]));
+      }
+
+      if (i == current_pos) {
+	powerHeading(current_pos);
+      }
+
+      i++;
+
+      {
+	int dir = enc_read();
     
-    if ((i < 0 && current_pos + i >= 0) || 
-      (i > 0 && current_pos + i <= 100)){
-      current_pos += i;
-      powerHeading(current_pos); 
+	if ((dir < 0 && current_pos + dir >= 0) ||
+	    (dir > 0 && current_pos + dir <= 100)){
+	  current_pos += dir;
+	  powerHeading(current_pos);
+	}
+      }
+      if (btnDown())
+	break;
     }
+    first = false;
   }
+
+  powerHeading(current_pos);
   
   while(btnDown())
     delay(100);
